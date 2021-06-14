@@ -11,6 +11,6 @@ Para desenvolver é essencial criar o ambiente necessário para rodar o módulo 
 Crie o ambiente para desenvolvimento com `python3 -m venv .venv`.
 Ative com `source ./.venv/bin/activate`. Quando quiser desativar use o comando `deactivate`.
 
-2. Faça uma instalação editável do pacote com `pip install -e .`. Instalando desta maneira o pacote sempre conterá o código atual.
+2. Faça uma instalação editável do pacote com `pip install -e .` (Instalando desta maneira o pacote sempre conterá o código atual).
 
 3. Rode os testes com `pytest`.
