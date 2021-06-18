@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
 
-import nlsystem
+import nls
 
 
-class simple_convergent_system(nlsystem.System):
+class simple_convergent_system(nls.System):
     def model(self, x, t):
         return (x[1], -x[0] - x[1])
 
