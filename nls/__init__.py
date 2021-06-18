@@ -31,11 +31,18 @@ class System:
 						f'O comprimento do sinal de input "{key}" é diferente do comprimento da série temporal.')
 			self.inputs = inputs
 
-	def simulate(x0):
+	def simulate(self, initial_state):
 		""" Simula o sistema.
 			Armazena as saídas e os estados do sistema na simulação, correspondendo aos instantes de tempo do vetor t.
+		
+		Parâmetros
+		----------
+		initial_state : tuple
+			Uma tupla definindo o estado inicial do sistema para a simulação.
 		"""
-		pass
+		self.x = odeint(self.model, initial_state, self.t)
+		
+		# Faz a interpolação das saídas para terem a mesma dimensão da série temporal.
 
 	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None):
 		""" Plota o plano de fase do sistema.
