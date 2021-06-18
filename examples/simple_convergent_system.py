@@ -6,6 +6,13 @@ import nls
 
 
 class simple_convergent_system(nls.System):
+    """ Sistema simples e globalmente estável, sem entradas.
+
+    .. math::
+        x0' = x1
+        x1' = -x0 - x1
+    """
+
     def model(self, x, t):
         return (x[1], -x[0] - x[1])
 
