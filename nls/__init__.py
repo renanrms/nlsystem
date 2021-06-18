@@ -24,7 +24,7 @@ class System:
 			raise Exception("A série temporal não pode ter comprimento 0.")
 		self.t = t
 
-		if inputs != None:
+		if inputs is not None:
 			for key in inputs.keys():
 				if len(inputs[key]) != length:
 					raise Exception(
