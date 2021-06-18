@@ -40,7 +40,9 @@ class System:
 		initial_state : tuple
 			Uma tupla definindo o estado inicial do sistema para a simulação.
 		"""
-		self.x = odeint(self.model, initial_state, self.t)
+		states = odeint(self.model, initial_state, self.t)
+
+		self.x = [states[:, i] for i in range(states.shape[1])]
 		
 		# Faz a interpolação das saídas para terem a mesma dimensão da série temporal.
 
