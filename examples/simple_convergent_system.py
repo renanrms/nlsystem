@@ -1,18 +1,19 @@
-import nlsystem
-
 import numpy as np
 import matplotlib.pyplot as plt
+from itertools import product
+
+import nls
 
 
-def system(x, t):
-	return (x[1], -x[0] - x[1])
+class simple_convergent_system(nls.System):
+    def model(self, x, t):
+        return (x[1], -x[0] - x[1])
 
 
-arrows = [
-	np.linspace(-3, 3, 17),
-	np.linspace(-3, 3, 17)
-]
+system = simple_convergent_system()
 
-nlsystem.plot_phase_plane(system, (), arrows)
+system.set_simulation_data(t=np.linspace(0, 10, 10000))
+
+system.plot_phase_plan([-1,1], [-1,1], n=17, curves=[(-1,0), (1,0), (0,-1), (0,1)])
 
 plt.show()
