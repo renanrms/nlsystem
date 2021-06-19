@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
+from scipy import interpolate
 from itertools import product
 
 
@@ -11,7 +12,10 @@ class System:
 		self.t = None
 		self.x = []
 		self.inputs = {}
-		self.outputs = {}
+		self.signals = {}
+		self._interpolated_inputs = {}
+		self._avoid_save_signals = False
+		self._raw_signals = {}
 
 	def model(self, x, t):
 		""" Método abstrato. Deve retornar uma tupla com as derivadas do estado x.
@@ -19,32 +23,108 @@ class System:
 		raise Exception("Modelo não implementado.")
 
 	def set_simulation_data(self, t, inputs=None):
+		""" Armazena os dados para a simulação do sistema.
+
+		Parâmetros
+		----------
+		t : iterável
+			Iterável contento os instantes de tempo para simulação.
+		inputs : dict
+			Dicionário contendo os sinais de entrada para simulação do modelo.
+			Deve ter a forma {'nome_sinal': sinal, ...}, onde o sinal dele ser um iterável com mesmo comprimento de t.
+		"""
 		length = len(t)
 		if length == 0:
 			raise Exception("A série temporal não pode ter comprimento 0.")
-		self.t = t
+		self.t = np.array(t)
 
 		if inputs is not None:
+			self.inputs = {}
+			self._interpolated_inputs = {}
 			for key in inputs.keys():
 				if len(inputs[key]) != length:
 					raise Exception(
 						f'O comprimento do sinal de input "{key}" é diferente do comprimento da série temporal.')
-			self.inputs = inputs
+				self.inputs[key] = np.array(inputs[key])
+				self._interpolated_inputs[key] = interpolate.interp1d(t, inputs[key], fill_value="extrapolate")
+
+	def _clean_regressive_time_serie_end_to_begin(self, time_serie):
+		""" Elimina regiões de regressão da série temporal, que podem ter sido geradas por recálculos de um método de aproximação. O método parte do fim e retira cada amostra com instante de tempo porterior ao da amostra sucessora.
+
+		Parâmetros
+		----------
+		time_serie : dict
+			Um dicionário no formato {'time': [], 'data': []}
+		"""
+		i = len(time_serie['time']) - 1
+		while i > 0:
+			if time_serie['time'][i-1] > time_serie['time'][i]:
+				time_serie['time'].pop(i-1)
+				time_serie['data'].pop(i-1)
+			i -= 1
 
 	def simulate(self, initial_state):
 		""" Simula o sistema.
-			Armazena as saídas e os estados do sistema na simulação, correspondendo aos instantes de tempo do vetor t.
+		
+		Também armazena as saídas e os estados do sistema na simulação, correspondendo aos instantes de tempo do vetor t.
 		
 		Parâmetros
 		----------
 		initial_state : tuple
 			Uma tupla definindo o estado inicial do sistema para a simulação.
 		"""
+
+		self._raw_signals = {}
+		self.signals = {}
+
 		states = odeint(self.model, initial_state, self.t)
 
 		self.x = [states[:, i] for i in range(states.shape[1])]
+
+		for name in self._raw_signals.keys():
+			self._clean_regressive_time_serie_end_to_begin(self._raw_signals[name])
+			interp = interpolate.interp1d(self._raw_signals[name]['time'], self._raw_signals[name]['data'], fill_value="extrapolate")
+			self.signals[name] = interp(self.t)
+
+	def save_signal(self, name, sample, t):
+		""" Salva amostra do sinal acesso a este após a simulação.
 		
-		# Faz a interpolação das saídas para terem a mesma dimensão da série temporal.
+		Deve ser usada dentro do método `model` para salvar sinais ao longo da simulação.
+
+		Parâmetros
+		----------
+		name : str
+			Nome do sinal salvo.
+		sample : float
+			Amostra do sinal a ser armazenada.
+		t : float
+			Instante de tempo na simulação.
+		"""
+
+		if self._avoid_save_signals:
+			return
+
+		if not name in self._raw_signals.keys():
+			self._raw_signals[name] = {'data':[], 'time':[]}
+
+		self._raw_signals[name]['data'].append(sample)
+		self._raw_signals[name]['time'].append(t)
+	
+	def input(self, name, t):
+		""" Retorna a amostra do sinal de entrada `name` para o instante `t` através de uma interpolação do sinal.
+
+		Parâmetros
+		----------
+		name : str
+			Nome do sinal de entrada.
+		t : float
+			Instante de tempo na simulação.
+		"""
+
+		if not name in self._interpolated_inputs.keys():
+			raise Exception("Sinal de entrada não fornecido.")
+		
+		return float(self._interpolated_inputs[name](t))
 
 	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None):
 		""" Plota o plano de fase do sistema.
@@ -64,6 +144,8 @@ class System:
 		cmap : Colormap, optional
 			Define as cores usadas nas setas do plano de fase.
 		"""
+
+		self._avoid_save_signals = True
 
 		t0 = 0
 		if self.t is not None:
@@ -136,3 +218,5 @@ class System:
 		y_step = (y_max - y_min) / (y_n - 1)
 		plt.xlim(x_min - x_step, x_max + x_step)
 		plt.ylim(y_min - y_step, y_max + y_step)
+
+		self._avoid_save_signals = False
