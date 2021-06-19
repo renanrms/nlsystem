@@ -198,7 +198,7 @@ class System:
 				dx_norm[i] = dx[i] / abs_derivate[i]
 				dy_norm[i] = dy[i] / abs_derivate[i]
 
-		# Protando o campo vetorial com QUIVER
+		# Plota o campo vetorial com QUIVER
 		if cmap == None:
 			cmap = get_cmap('hot')
 
@@ -208,7 +208,7 @@ class System:
 		plt.quiver(x, y, dx_norm, dy_norm, edgecolor='k', angles='xy',
 				   facecolor='None', linewidth=.1, pivot='middle')
 
-		# Plota algumas curvas apenas para ilustrar
+		# Plota algumas curvas para ilustrar
 		if curves is not None:
 			if self.t is None:
 				raise Exception("Para plotar as curvas é preciso definir o array de instantes de tempo. Ver método set_simulation_data().")
