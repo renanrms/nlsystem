@@ -2,16 +2,13 @@ import pytest
 
 import numpy as np
 
-import nlsystem
+import nlsystem as nls
 
 
 def test_plot_phase_plane():
-	def system(x, t):
-		return (x[1], -x[0])
+	class test_system(nls.System):
+		def model(self, x, t):
+			return (x[1], -x[0] - x[1])
 
-	arrows = [
-		np.linspace(-3, 3, 17),
-		np.linspace(-3, 3, 17)
-	]
-
-	nlsystem.plot_phase_plane(system, (), arrows)
+	system = test_system()
+	system.plot_phase_plan([-1,1], [-1,1], n=17)
