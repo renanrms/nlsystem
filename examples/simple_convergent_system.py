@@ -9,8 +9,8 @@ class simple_convergent_system(nls.System):
     """ Sistema simples e globalmente estável, sem entradas.
 
     .. math::
-        x0' = x1
-        x1' = -x0 - x1
+        \dot{x_0} = x_1
+        \dot{x_1} = -x_0 - x_1
     """
 
     def model(self, x, t):
