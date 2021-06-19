@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import product
 
-import nls
+import nlsystem as nls
 
 
 class simple_input_system(nls.System):
