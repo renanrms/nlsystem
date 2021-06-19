@@ -1,9 +1,9 @@
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
-from scipy.integrate import odeint
-from scipy import interpolate
 from itertools import product
+from matplotlib.cm import get_cmap
+from scipy.integrate import odeint
+from scipy.interpolate import interp1d
 
 
 class System:
@@ -49,7 +49,7 @@ class System:
 					raise Exception(
 						f'O comprimento do sinal de input "{key}" é diferente do comprimento da série temporal.')
 				self.inputs[key] = np.array(inputs[key])
-				self._interpolated_inputs[key] = interpolate.interp1d(t, inputs[key], fill_value="extrapolate")
+				self._interpolated_inputs[key] = interp1d(t, inputs[key], fill_value="extrapolate")
 		
 		self._raw_signals = None
 		self.signals = None
@@ -89,7 +89,7 @@ class System:
 
 		for name in self._raw_signals.keys():
 			self._clean_regressive_time_serie_end_to_begin(self._raw_signals[name])
-			interp = interpolate.interp1d(self._raw_signals[name]['time'], self._raw_signals[name]['data'], fill_value="extrapolate")
+			interp = interp1d(self._raw_signals[name]['time'], self._raw_signals[name]['data'], fill_value="extrapolate")
 			self.signals[name] = interp(self.t)
 
 	def save_signal(self, name, sample, t):
@@ -200,7 +200,7 @@ class System:
 
 		# Protando o campo vetorial com QUIVER
 		if cmap == None:
-			cmap = matplotlib.cm.get_cmap('hot')
+			cmap = get_cmap('hot')
 
 		plt.axes([0.025, 0.025, 0.95, 0.95])
 		plt.quiver(x, y, dx_norm, dy_norm, abs_derivate,
