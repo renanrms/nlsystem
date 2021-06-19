@@ -10,12 +10,12 @@ class System:
 
 	def __init__(self):
 		self.t = None
-		self.x = []
-		self.inputs = {}
-		self.signals = {}
-		self._interpolated_inputs = {}
+		self.x = None
+		self.inputs = None
+		self.signals = None
+		self._interpolated_inputs = None
+		self._raw_signals = None
 		self._avoid_save_signals = False
-		self._raw_signals = {}
 
 	def model(self, x, t):
 		""" Método abstrato. Deve retornar uma tupla com as derivadas do estado x.
@@ -31,22 +31,28 @@ class System:
 			Iterável contento os instantes de tempo para simulação.
 		inputs : dict
 			Dicionário contendo os sinais de entrada para simulação do modelo.
-			Deve ter a forma {'nome_sinal': sinal, ...}, onde o sinal dele ser um iterável com mesmo comprimento de t.
+			Deve ter a forma { 'nome_sinal': sinal, ... } , onde o sinal deve ter o mesmo comprimento de t.
 		"""
-		length = len(t)
-		if length == 0:
+
+		if len(t) == 0:
 			raise Exception("A série temporal não pode ter comprimento 0.")
 		self.t = np.array(t)
+
+		self.inputs = None
+		self._interpolated_inputs = None
 
 		if inputs is not None:
 			self.inputs = {}
 			self._interpolated_inputs = {}
 			for key in inputs.keys():
-				if len(inputs[key]) != length:
+				if len(inputs[key]) != len(self.t):
 					raise Exception(
 						f'O comprimento do sinal de input "{key}" é diferente do comprimento da série temporal.')
 				self.inputs[key] = np.array(inputs[key])
 				self._interpolated_inputs[key] = interpolate.interp1d(t, inputs[key], fill_value="extrapolate")
+		
+		self._raw_signals = None
+		self.signals = None
 
 	def _clean_regressive_time_serie_end_to_begin(self, time_serie):
 		""" Elimina regiões de regressão da série temporal, que podem ter sido geradas por recálculos de um método de aproximação. O método parte do fim e retira cada amostra com instante de tempo porterior ao da amostra sucessora.
@@ -120,6 +126,9 @@ class System:
 		t : float
 			Instante de tempo na simulação.
 		"""
+
+		if self.inputs is None:
+			raise Exception("Não foram forneciso sinais de entrada.")
 
 		if not name in self._interpolated_inputs.keys():
 			raise Exception("Sinal de entrada não fornecido.")
