@@ -15,7 +15,7 @@ class System:
 		self.signals = None
 		self._interpolated_inputs = None
 		self._raw_signals = None
-		self._avoid_save_signals = False
+		self._save_signals = False
 
 	def model(self, x, t):
 		""" Método abstrato. Deve retornar uma tupla com as derivadas do estado x.
@@ -69,21 +69,27 @@ class System:
 				time_serie['data'].pop(i-1)
 			i -= 1
 
-	def simulate(self, initial_state):
+	def simulate(self, initial_state, save_signals=True):
 		""" Simula o sistema.
 		
-		Também armazena as saídas e os estados do sistema na simulação, correspondendo aos instantes de tempo do vetor t.
+		Também armazena as saídas e os estados do sistema na simulação, correspondendo aos instantes de tempo do vetor `t`.
 		
 		Parâmetros
 		----------
 		initial_state : tuple
 			Uma tupla definindo o estado inicial do sistema para a simulação.
+		save_signals : bool
+			Se for `True` salva os sinais indicados pelo modelo durante a simulação.
+			
+			Se for `False` escapa do método `save_signals`.
 		"""
 
 		self._raw_signals = {}
 		self.signals = {}
 
+		self._save_signals = save_signals
 		states = odeint(self.model, initial_state, self.t)
+		self._save_signals = False
 
 		self.x = [states[:, i] for i in range(states.shape[1])]
 
@@ -107,7 +113,7 @@ class System:
 			Instante de tempo na simulação.
 		"""
 
-		if self._avoid_save_signals:
+		if not self._save_signals:
 			return
 
 		if not name in self._raw_signals.keys():
@@ -191,12 +197,10 @@ class System:
 			plt.gca().add_patch(plt.Rectangle((x_min, y_min), width, height, linewidth=0.1, edgecolor='g', facecolor='none'))
 
 		# Obtém cada coordenada da resposta do sistema nos pontos de teste.
-		self._avoid_save_signals = True
 		fx0, fy0 = self.model((x_max, y_max), t0)
 		fx1, fy1 = self.model((x_max, y_min), t0)
 		fx2, fy2 = self.model((x_min, y_min), t0)
 		fx3, fy3 = self.model((x_min, y_max), t0)
-		self._avoid_save_signals = False
 
 		# Verifica a variação de sinal ou não da cada coordenada em cada um dos eixos.
 		Gxx = min(fx2*fx1, fx3*fx0)
@@ -264,8 +268,6 @@ class System:
 			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de raízes.
 		"""
 
-		self._avoid_save_signals = True
-
 		t0, x_min, x_max, y_min, y_max, x_n, y_n = self._parse_context_data(x_limits, y_limits, n)
 
 		arrows = list(product(
@@ -329,5 +331,3 @@ class System:
 			plt.plot(point['x'], point['y'], 'bo', label='Pontos de Equilíbrio')
 
 		plt.legend()
-
-		self._avoid_save_signals = False
