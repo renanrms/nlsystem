@@ -135,7 +135,7 @@ class System:
 		
 		return float(self._interpolated_inputs[name](t))
 
-	def balance_points(self, x_limits, y_limits):
+	def balance_points(self, x_limits, y_limits, plot_trace=False):
 		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
 		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
 
@@ -147,13 +147,26 @@ class System:
 
 		t0, x_min, x_max, y_min, y_max = self._parse_context_data(x_limits, y_limits)
 		
-		delta = 0.01 * min(x_max - x_min, y_max - y_min)
+		delta = 0.1 * min(x_max - x_min, y_max - y_min)
 
-		return self._get_balance_points(t0, x_min, x_max, y_min, y_max, delta)
+		return self._get_balance_points(t0, x_min, x_max, y_min, y_max, delta, plot_trace=plot_trace)
 
-	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps=10e-9):
+	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps=10e-5, plot_trace=False):
 		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
 		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
+		
+		O retângulo será definido como a seguir. ::
+
+		  :           ^
+		  :           |   f3      f0 = (fx0, fy0)
+		  :    y_max -+  o--------o
+		  :           |  |        |
+		  :           |  |        |
+		  :           |  |        |
+		  :    y_min -+  o--------o
+		  :           |   f2      f1
+		  :           o--+--------+---->
+		  :              x_min    x_max	
 
 		Parâmetros
 		----------
@@ -163,24 +176,19 @@ class System:
 			Limites inferior e superior de cada eixo.
 		delta : float
 			Largura maxima que uma subregião pode ter para descartar a região.
-		eps : float, opcional
+		eps : float
 			precisão usada para buscar os pontos.
+		plot_trace : bool
+			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de raízes.
 		"""
 
-		"""
-		O espaço de configura com a seguinte lógica:
+		width = x_max - x_min
+		height = y_max - y_min
+		x_middle = (x_min + x_max)/2
+		y_middle = (y_min + y_max)/2
 
-				^
-				|   f3      f0 = (fx0, fy0)
-		 y_max -+  o-------o
-				|  |       |
-				|  |       |
-				|  |       |
-		 y_min -+  o-------o
-				|   f2      f1
-				o--+------+---->
-				   x_min  x_max	
-		"""
+		if plot_trace:
+			plt.gca().add_patch(plt.Rectangle((x_min, y_min), width, height, linewidth=0.1, edgecolor='g', facecolor='none'))
 
 		# Obtém cada coordenada da resposta do sistema nos pontos de teste.
 		self._avoid_save_signals = True
@@ -200,16 +208,16 @@ class System:
 		Gx = min(Gxx, Gxy)
 		Gy = min(Gyx, Gyy)
 
-		d_max = max(x_max - x_min, y_max - y_min)
+		largest_dim = max(width, height)
 		contain_zeros_inside = max(Gx, Gy) < 0 or (fx2 == 0 and fy2 == 0)
 
-		if contain_zeros_inside and d_max <= eps:
+		if contain_zeros_inside and largest_dim <= eps:
 			return [{'x':x_min, 'y':y_min}]
-		elif contain_zeros_inside or d_max > delta:
-			if x_max - x_min >= y_max - y_min:
-				return self._get_balance_points(t0, x_min, (x_min + x_max)/2, y_min, y_max, delta) + self._get_balance_points(t0, (x_min + x_max)/2, x_max, y_min, y_max, delta)
+		elif contain_zeros_inside or largest_dim > delta:
+			if width >= height:
+				return self._get_balance_points(t0, x_min, x_middle, y_min, y_max, delta, plot_trace=plot_trace) + self._get_balance_points(t0, x_middle, x_max, y_min, y_max, delta, plot_trace=plot_trace)
 			else:
-				return self._get_balance_points(t0, x_min, x_max, y_min, (y_min + y_max)/2, delta) + self._get_balance_points(t0, x_min, x_max, (y_min + y_max)/2, y_max, delta)
+				return self._get_balance_points(t0, x_min, x_max, y_min, y_middle, delta, plot_trace=plot_trace) + self._get_balance_points(t0, x_min, x_max, y_middle, y_max, delta, plot_trace=plot_trace)
 		else:
 			return []
 
@@ -235,7 +243,7 @@ class System:
 		return t0, x_min, x_max, y_min, y_max, x_n, y_n
 
 
-	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None):
+	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None, plot_trace=False):
 		""" Plota o plano de fase do sistema.
 
 		Parâmetros
@@ -252,6 +260,8 @@ class System:
 			Determina se será incluída uma colorbar ao labo do gráfico.
 		cmap : Colormap, optional
 			Define as cores usadas nas setas do plano de fase.
+		plot_trace : bool
+			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de raízes.
 		"""
 
 		self._avoid_save_signals = True
@@ -313,7 +323,7 @@ class System:
 		plt.xlim(x_min - x_step, x_max + x_step)
 		plt.ylim(y_min - y_step, y_max + y_step)
 
-		balance_points = self.balance_points(x_limits, y_limits)
+		balance_points = self.balance_points(x_limits, y_limits, plot_trace=plot_trace)
 
 		for point in balance_points:
 			plt.plot(point['x'], point['y'], 'bo', label='Pontos de Equilíbrio')
