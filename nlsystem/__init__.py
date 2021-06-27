@@ -135,6 +135,106 @@ class System:
 		
 		return float(self._interpolated_inputs[name](t))
 
+	def balance_points(self, x_limits, y_limits):
+		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
+		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
+
+		Parâmetros
+		----------
+		x_limits, y_limits : list
+			Lista com os limites inferior e superior de cada eixo.
+		"""
+
+		t0, x_min, x_max, y_min, y_max = self._parse_context_data(x_limits, y_limits)
+		
+		delta = 0.01 * min(x_max - x_min, y_max - y_min)
+
+		return self._get_balance_points(t0, x_min, x_max, y_min, y_max, delta)
+
+	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps=10e-9):
+		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
+		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
+
+		Parâmetros
+		----------
+		t0 : float
+			Instante de referência para os cálculos.
+		x_min, x_max, y_min, y_max : float
+			Limites inferior e superior de cada eixo.
+		delta : float
+			Largura maxima que uma subregião pode ter para descartar a região.
+		eps : float, opcional
+			precisão usada para buscar os pontos.
+		"""
+
+		"""
+		O espaço de configura com a seguinte lógica:
+
+				^
+				|   f3      f0 = (fx0, fy0)
+		 y_max -+  o-------o
+				|  |       |
+				|  |       |
+				|  |       |
+		 y_min -+  o-------o
+				|   f2      f1
+				o--+------+---->
+				   x_min  x_max	
+		"""
+
+		# Obtém cada coordenada da resposta do sistema nos pontos de teste.
+		self._avoid_save_signals = True
+		fx0, fy0 = self.model((x_max, y_max), t0)
+		fx1, fy1 = self.model((x_max, y_min), t0)
+		fx2, fy2 = self.model((x_min, y_min), t0)
+		fx3, fy3 = self.model((x_min, y_max), t0)
+		self._avoid_save_signals = False
+
+		# Verifica a variação de sinal ou não da cada coordenada em cada um dos eixos.
+		Gxx = min(fx2*fx1, fx3*fx0)
+		Gxy = min(fx0*fx1, fx3*fx2)
+		Gyx = min(fy2*fy1, fy3*fy0)
+		Gyy = min(fy0*fy1, fy3*fy2)
+
+		# Verifica a variação de sinal de cada coordenada em pelo menos um dos eixos.
+		Gx = min(Gxx, Gxy)
+		Gy = min(Gyx, Gyy)
+
+		d_max = max(x_max - x_min, y_max - y_min)
+		contain_zeros_inside = max(Gx, Gy) < 0 or (fx2 == 0 and fy2 == 0)
+
+		if contain_zeros_inside and d_max <= eps:
+			return [{'x':x_min, 'y':y_min}]
+		elif contain_zeros_inside or d_max > delta:
+			if x_max - x_min >= y_max - y_min:
+				return self._get_balance_points(t0, x_min, (x_min + x_max)/2, y_min, y_max, delta) + self._get_balance_points(t0, (x_min + x_max)/2, x_max, y_min, y_max, delta)
+			else:
+				return self._get_balance_points(t0, x_min, x_max, y_min, (y_min + y_max)/2, delta) + self._get_balance_points(t0, x_min, x_max, (y_min + y_max)/2, y_max, delta)
+		else:
+			return []
+
+	def _parse_context_data(self, x_limits, y_limits, n=None):
+		""" Método interno para tratar alguns dados de entrada de funções.
+		"""
+
+		t0 = 0
+		if self.t is not None:
+			t0 = self.t[0]
+
+		x_min, x_max = x_limits
+		y_min, y_max = y_limits
+
+		if n is None:
+			return t0, x_min, x_max, y_min, y_max
+
+		if type(n) == int:
+			x_n, y_n = (n, n)
+		else:
+			x_n, y_n = n
+		
+		return t0, x_min, x_max, y_min, y_max, x_n, y_n
+
+
 	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None):
 		""" Plota o plano de fase do sistema.
 
@@ -156,25 +256,14 @@ class System:
 
 		self._avoid_save_signals = True
 
-		t0 = 0
-		if self.t is not None:
-			t0 = self.t[0]
-
-		x_min, x_max = x_limits
-		y_min, y_max = y_limits
-
-		if type(n) == int:
-			x_n, y_n = (n, n)
-		else:
-			x_n, y_n = n
-
-		x, y, dx, dy = [], [], [], []
+		t0, x_min, x_max, y_min, y_max, x_n, y_n = self._parse_context_data(x_limits, y_limits, n)
 
 		arrows = list(product(
 			np.linspace(x_min, x_max, x_n),
 			np.linspace(y_min, y_max, y_n)
 		))
 
+		x, y, dx, dy = [], [], [], []
 		for w0 in arrows:
 			w = self.model(w0, t0)
 			x.append(w0[0])
@@ -198,7 +287,6 @@ class System:
 				dx_norm[i] = dx[i] / abs_derivate[i]
 				dy_norm[i] = dy[i] / abs_derivate[i]
 
-		# Plota o campo vetorial com QUIVER
 		if cmap == None:
 			cmap = get_cmap('hot')
 
@@ -208,24 +296,28 @@ class System:
 		plt.quiver(x, y, dx_norm, dy_norm, edgecolor='k', angles='xy',
 				   facecolor='None', linewidth=.1, pivot='middle')
 
-		# Plota algumas curvas para ilustrar
 		if curves is not None:
 			if self.t is None:
 				raise Exception("Para plotar as curvas é preciso definir o array de instantes de tempo. Ver método set_simulation_data().")
 			for w0 in curves:
 				w = odeint(self.model, w0, self.t)
-				plt.plot(w[:, 0], w[:, 1], color='blue', linewidth=1)
+				plt.plot(w[:, 0], w[:, 1], color='#1f77b4', linewidth=1)
 
-		# Configura as anotações e informações adicionais do gráfico
 		sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(
 			vmin=min(abs_derivate), vmax=max(abs_derivate)))
 		if colorbar == True:
 			plt.colorbar(sm, shrink=0.6)
 
-		# Define os limites de exibição dos eixos
 		x_step = (x_max - x_min) / (x_n - 1)
 		y_step = (y_max - y_min) / (y_n - 1)
 		plt.xlim(x_min - x_step, x_max + x_step)
 		plt.ylim(y_min - y_step, y_max + y_step)
+
+		balance_points = self.balance_points(x_limits, y_limits)
+
+		for point in balance_points:
+			plt.plot(point['x'], point['y'], 'bo', label='Pontos de Equilíbrio')
+
+		plt.legend()
 
 		self._avoid_save_signals = False
