@@ -141,7 +141,7 @@ class System:
 		
 		return float(self._interpolated_inputs[name](t))
 
-	def balance_points(self, x_limits, y_limits, plot_trace=False):
+	def balance_points(self, x_limits, y_limits, resolution_factor=None, plot_trace=False):
 		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
 		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
 
@@ -149,15 +149,24 @@ class System:
 		----------
 		x_limits, y_limits : list
 			Lista com os limites inferior e superior de cada eixo.
+		resolution_factor : float
+			Determina a granularidade mínima com que se dividirá a região para descartar as subregiões que parecem não conter pontos de equilíbrio.
+
+			O método irá procurar os pontos de equilíbrio dividindo sussecivamente cada subregião até que sua maior dimensão se torne menor que o tamanho da menor dimensão do região original multiplicada por `resolution_factor`.
+		plot_trace : bool
+			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de pontos de equilíbrio.
 		"""
 
 		t0, x_min, x_max, y_min, y_max = self._parse_context_data(x_limits, y_limits)
 		
-		delta = 0.1 * min(x_max - x_min, y_max - y_min)
+		if resolution_factor is None:
+			resolution_factor = 0.01
+
+		delta = resolution_factor * min(x_max - x_min, y_max - y_min)
 
 		return self._get_balance_points(t0, x_min, x_max, y_min, y_max, delta, plot_trace=plot_trace)
 
-	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps=10e-5, plot_trace=False):
+	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps=2e-32, plot_trace=False):
 		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
 		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
 		
@@ -194,7 +203,7 @@ class System:
 		y_middle = (y_min + y_max)/2
 
 		if plot_trace:
-			plt.gca().add_patch(plt.Rectangle((x_min, y_min), width, height, linewidth=0.1, edgecolor='g', facecolor='none'))
+			plt.gca().add_patch(plt.Rectangle((x_min, y_min), width, height, linewidth=0.2, edgecolor='g', facecolor='none'))
 
 		# Obtém cada coordenada da resposta do sistema nos pontos de teste.
 		fx0, fy0 = self.model((x_max, y_max), t0)
@@ -247,7 +256,7 @@ class System:
 		return t0, x_min, x_max, y_min, y_max, x_n, y_n
 
 
-	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None, plot_trace=False):
+	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None, balance_kwargs={}):
 		""" Plota o plano de fase do sistema.
 
 		Parâmetros
@@ -264,8 +273,8 @@ class System:
 			Determina se será incluída uma colorbar ao labo do gráfico.
 		cmap : Colormap, optional
 			Define as cores usadas nas setas do plano de fase.
-		plot_trace : bool
-			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de raízes.
+		balance_kwargs : dict
+			Argumentos passados para o método `blance_points`.
 		"""
 
 		t0, x_min, x_max, y_min, y_max, x_n, y_n = self._parse_context_data(x_limits, y_limits, n)
@@ -325,9 +334,10 @@ class System:
 		plt.xlim(x_min - x_step, x_max + x_step)
 		plt.ylim(y_min - y_step, y_max + y_step)
 
-		balance_points = self.balance_points(x_limits, y_limits, plot_trace=plot_trace)
+		balance_points = self.balance_points(x_limits, y_limits, **balance_kwargs)
 
 		for point in balance_points:
 			plt.plot(point['x'], point['y'], 'bo', label='Pontos de Equilíbrio')
 
-		plt.legend()
+		if balance_points != []:
+			plt.legend(loc='upper right')
