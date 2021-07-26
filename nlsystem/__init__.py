@@ -7,6 +7,7 @@ from scipy.interpolate import interp1d
 
 
 class System:
+	dim = None
 
 	def __init__(self):
 		self.t = None
@@ -141,6 +142,9 @@ class System:
 			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de pontos de equilíbrio.
 		"""
 
+		if self.__class__.dim != 2:
+			raise Exception("Ainda não implementado para sistemas com dimensão diferente de 2.")
+
 		t0, x_min, x_max, y_min, y_max = self._parse_context_data(x_limits, y_limits)
 		
 		if resolution_factor is None:
@@ -260,6 +264,9 @@ class System:
 		balance_kwargs : dict
 			Argumentos passados para o método `blance_points`.
 		"""
+
+		if self.__class__.dim != 2:
+			raise Exception("Para plotar o plano de fase, o sistema deve possuir dimensão 2.")
 
 		t0, x_min, x_max, y_min, y_max, x_n, y_n = self._parse_context_data(x_limits, y_limits, n)
 

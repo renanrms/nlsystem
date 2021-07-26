@@ -13,6 +13,8 @@ class simple_convergent_system(nls.System):
         \dot{x_1} = -x_0 - x_1
     """
 
+    dim = 2
+    
     def model(self, x, t):
         return (x[1], -x[0] - x[1])
 

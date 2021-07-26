@@ -13,6 +13,8 @@ class simple_input_system(nls.System):
         \dot{x_1} = -x_0 - x_1 + u_0(t)
     """
 
+    dim = 2
+    
     def model(self, x, t):
         self.save_signal('v', x[0] + x[1], t)
         return (x[1], -x[0] - x[1] + self.input('u0', t))
