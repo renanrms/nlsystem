@@ -11,18 +11,17 @@ class System:
 	def __init__(self):
 		self.t = None
 		self.x = None
-		self.inputs = None
-		self.signals = None
-		self._interpolated_inputs = None
-		self._raw_signals = None
-		self._save_signals = False
+		self.inputs = {}
+		self.signals = {}
+		self._interpolated_inputs = {}
+		self._raw_signals = {}
 
 	def model(self, x, t):
 		""" Método abstrato. Deve retornar uma tupla com as derivadas do estado x.
 		"""
 		raise Exception("Modelo não implementado.")
 
-	def set_simulation_data(self, t, inputs=None):
+	def set_simulation_data(self, t, inputs={}):
 		""" Armazena os dados para a simulação do sistema.
 
 		Parâmetros
@@ -38,21 +37,18 @@ class System:
 			raise Exception("A série temporal não pode ter comprimento 0.")
 		self.t = np.array(t)
 
-		self.inputs = None
-		self._interpolated_inputs = None
+		self.inputs = {}
+		self._interpolated_inputs = {}
 
-		if inputs is not None:
-			self.inputs = {}
-			self._interpolated_inputs = {}
-			for key in inputs.keys():
-				if len(inputs[key]) != len(self.t):
-					raise Exception(
-						f'O comprimento do sinal de input "{key}" é diferente do comprimento da série temporal.')
-				self.inputs[key] = np.array(inputs[key])
-				self._interpolated_inputs[key] = interp1d(t, inputs[key], fill_value="extrapolate")
+		for key in inputs.keys():
+			if len(inputs[key]) != len(self.t):
+				raise Exception(
+					f'O comprimento do sinal de input "{key}" é diferente do comprimento da série temporal.')
+			self.inputs[key] = np.array(inputs[key])
+			self._interpolated_inputs[key] = interp1d(t, inputs[key], fill_value="extrapolate")
 		
-		self._raw_signals = None
-		self.signals = None
+		self._raw_signals = {}
+		self.signals = {}
 
 	def _clean_regressive_time_serie_end_to_begin(self, time_serie):
 		""" Elimina regiões de regressão da série temporal, que podem ter sido geradas por recálculos de um método de aproximação. O método parte do fim e retira cada amostra com instante de tempo porterior ao da amostra sucessora.
@@ -69,7 +65,7 @@ class System:
 				time_serie['data'].pop(i-1)
 			i -= 1
 
-	def simulate(self, initial_state, save_signals=True):
+	def simulate(self, initial_state):
 		""" Simula o sistema.
 		
 		Também armazena as saídas e os estados do sistema na simulação, correspondendo aos instantes de tempo do vetor `t`.
@@ -78,18 +74,12 @@ class System:
 		----------
 		initial_state : tuple
 			Uma tupla definindo o estado inicial do sistema para a simulação.
-		save_signals : bool
-			Se for `True` salva os sinais indicados pelo modelo durante a simulação.
-			
-			Se for `False` escapa do método `save_signals`.
 		"""
 
 		self._raw_signals = {}
 		self.signals = {}
 
-		self._save_signals = save_signals
 		states = odeint(self.model, initial_state, self.t)
-		self._save_signals = False
 
 		self.x = [states[:, i] for i in range(states.shape[1])]
 
@@ -113,9 +103,6 @@ class System:
 			Instante de tempo na simulação.
 		"""
 
-		if not self._save_signals:
-			return
-
 		if not name in self._raw_signals.keys():
 			self._raw_signals[name] = {'data':[], 'time':[]}
 
@@ -132,9 +119,6 @@ class System:
 		t : float
 			Instante de tempo na simulação.
 		"""
-
-		if self.inputs is None:
-			raise Exception("Não foram forneciso sinais de entrada.")
 
 		if not name in self._interpolated_inputs.keys():
 			raise Exception("Sinal de entrada não fornecido.")
