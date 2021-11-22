@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+
+from abc import ABC, abstractmethod
 from itertools import product
 from matplotlib.cm import get_cmap
 from scipy.integrate import odeint
@@ -9,7 +11,7 @@ from .rectangle import *
 from .time_series import *
 from .calculus_functions import *
 
-class System:
+class System(ABC):
 	dim = None
 
 	def __init__(self):
@@ -20,10 +22,11 @@ class System:
 		self._interpolated_inputs = {}
 		self._raw_signals = {}
 
+	@abstractmethod
 	def model(self, x, t):
 		""" Método abstrato. Deve retornar uma tupla com as derivadas do estado x.
 		"""
-		raise Exception("Modelo não implementado.")
+		pass
 
 	def set_simulation_data(self, t, inputs={}):
 		""" Armazena os dados para a simulação do sistema.
