@@ -5,13 +5,9 @@ from matplotlib.cm import get_cmap
 from scipy.integrate import odeint
 from scipy.interpolate import interp1d
 
-#from .rectangle import Rectangle
-#from .rectangle import *
+from .rectangle import *
 from .time_series import *
-
-#__all__ = ['rectangle']
-
-print(dir())
+from .calculus_functions import *
 
 class System:
 	dim = None
@@ -118,7 +114,7 @@ class System:
 		
 		return float(self._interpolated_inputs[name](t))
 
-	def balance_points(self, x_limits, y_limits, resolution_factor=None, plot_trace=False):
+	def balance_points(self, x_limits, y_limits, min_resolution=1e-2, max_resolution=1e-16, plot_trace=False):
 		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
 		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
 
@@ -126,10 +122,12 @@ class System:
 		----------
 		x_limits, y_limits : list
 			Lista com os limites inferior e superior de cada eixo.
-		resolution_factor : float
+		min_resolution : float
 			Determina a granularidade mínima com que se dividirá a região para descartar as subregiões que parecem não conter pontos de equilíbrio.
 
-			O método irá procurar os pontos de equilíbrio dividindo sussecivamente cada subregião até que sua maior dimensão se torne menor que o tamanho da menor dimensão do região original multiplicada por `resolution_factor`.
+			O método irá procurar os pontos de equilíbrio dividindo sussecivamente cada subregião até que sua maior dimensão se torne menor que o tamanho da menor dimensão do região original multiplicada por `min_resolution`.
+		max_resolution : float
+			Determina a granularidade máxima com que se dividirá as subregiões de modo para considerar que o ponto de equilíbrio foi encontrado.
 		plot_trace : bool
 			Se for `True`, desenha os retângulos que estão sendo verificados quanto à existência de pontos de equilíbrio.
 		"""
@@ -139,14 +137,14 @@ class System:
 
 		t0, x_min, x_max, y_min, y_max = self._parse_context_data(x_limits, y_limits)
 		
-		if resolution_factor is None:
-			resolution_factor = 0.01
+		smallest_dim = min(x_max - x_min, y_max - y_min)
 
-		delta = resolution_factor * min(x_max - x_min, y_max - y_min)
+		delta = min_resolution * smallest_dim
+		eps = max_resolution * smallest_dim
 
-		return self._get_balance_points(t0, x_min, x_max, y_min, y_max, delta, plot_trace=plot_trace)
+		return self._get_balance_points(t0, x_min, x_max, y_min, y_max, delta, eps, plot_trace)
 
-	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps=2e-32, plot_trace=False):
+	def _get_balance_points(self, t0, x_min, x_max, y_min, y_max, delta, eps, plot_trace):
 		""" Obtém os pontos de equilíbrio do sistema pelo método de bisecção.
 		O valor de retorno é dado por lista de dicionários com chaves `x` e `y`.
 		
@@ -191,7 +189,7 @@ class System:
 		fx2, fy2 = self.model((x_min, y_min), t0)
 		fx3, fy3 = self.model((x_min, y_max), t0)
 
-		# Verifica a variação de sinal ou não da cada coordenada em cada um dos eixos.
+		# Verifica a variação de sinal ou não de cada coordenada em cada um dos eixos.
 		Gxx = min(fx2*fx1, fx3*fx0)
 		Gxy = min(fx0*fx1, fx3*fx2)
 		Gyx = min(fy2*fy1, fy3*fy0)
@@ -202,15 +200,25 @@ class System:
 		Gy = min(Gyx, Gyy)
 
 		largest_dim = max(width, height)
-		contain_zeros_inside = max(Gx, Gy) < 0 or (fx2 == 0 and fy2 == 0)
+		contain_zeros_inside = (Gx < 0 or np.isnan(fx2) or fx2 == 0) and (Gy < 0 or np.isnan(fy2) or fy2 == 0)
 
 		if contain_zeros_inside and largest_dim <= eps:
-			return [{'x':x_min, 'y':y_min}]
+			coordinates = [x_middle, y_middle]
+			jacobian = jacobian_matrix(self.model, coordinates)
+			eigen_values = np.linalg.eigvals(jacobian)
+			max_value = max(np.real(eigen_values))
+			if max_value < -eps:
+				stability = 'stable'
+			elif max_value <= eps:
+				stability = 'unknown'
+			else:
+				stability = 'instable'
+			return [{'coords':coordinates, 'stability':stability, 'jacobian':jacobian, 'eigen_values': eigen_values}]
 		elif contain_zeros_inside or largest_dim > delta:
 			if width >= height:
-				return self._get_balance_points(t0, x_min, x_middle, y_min, y_max, delta, plot_trace=plot_trace) + self._get_balance_points(t0, x_middle, x_max, y_min, y_max, delta, plot_trace=plot_trace)
+				return self._get_balance_points(t0, x_min, x_middle, y_min, y_max, delta, eps, plot_trace) + self._get_balance_points(t0, x_middle, x_max, y_min, y_max, delta, eps, plot_trace)
 			else:
-				return self._get_balance_points(t0, x_min, x_max, y_min, y_middle, delta, plot_trace=plot_trace) + self._get_balance_points(t0, x_min, x_max, y_middle, y_max, delta, plot_trace=plot_trace)
+				return self._get_balance_points(t0, x_min, x_max, y_min, y_middle, delta, eps, plot_trace) + self._get_balance_points(t0, x_min, x_max, y_middle, y_max, delta, eps, plot_trace)
 		else:
 			return []
 
@@ -236,7 +244,7 @@ class System:
 		return t0, x_min, x_max, y_min, y_max, x_n, y_n
 
 
-	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, colorbar=True, cmap=None, balance_kwargs={}):
+	def plot_phase_plan(self, x_limits, y_limits, n, curves=None, plot_balance_points=True, colorbar=True, cmap=get_cmap('hot'), balance_kwargs={}):
 		""" Plota o plano de fase do sistema.
 
 		Parâmetros
@@ -291,9 +299,6 @@ class System:
 				dx_norm[i] = dx[i] / abs_derivate[i]
 				dy_norm[i] = dy[i] / abs_derivate[i]
 
-		if cmap == None:
-			cmap = get_cmap('hot')
-
 		plt.axes([0.025, 0.025, 0.95, 0.95])
 		plt.quiver(x, y, dx_norm, dy_norm, abs_derivate,
 				   angles='xy', pivot='middle', alpha=.8, cmap=cmap)
@@ -317,10 +322,23 @@ class System:
 		plt.xlim(x_min - x_step, x_max + x_step)
 		plt.ylim(y_min - y_step, y_max + y_step)
 
-		balance_points = self.balance_points(x_limits, y_limits, **balance_kwargs)
+		if plot_balance_points:
+			balance_points = self.balance_points(x_limits, y_limits, **balance_kwargs)
 
-		for point in balance_points:
-			plt.plot(point['x'], point['y'], 'bo', label='Pontos de Equilíbrio')
+			stable_label = 'Ponto de equilíbrio estável'
+			instable_label = 'Ponto de equilíbrio instável'
+			unknown_label = 'Ponto de equilíbrio indeterminado'
 
-		if balance_points != []:
-			plt.legend(loc='upper right')
+			for point in balance_points:
+				if point['stability'] == 'stable':
+					plt.plot(*point['coords'], 'bo', label=stable_label)
+					stable_label = None
+				elif point['stability'] == 'instable':
+					plt.plot(*point['coords'], 'ro', label=instable_label)
+					instable_label = None
+				elif point['stability'] == 'unknown':
+					plt.plot(*point['coords'], 'go', label=unknown_label)
+					unknown_label = None
+
+			if balance_points != []:
+				plt.legend(loc='upper right')
